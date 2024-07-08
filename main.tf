@@ -101,14 +101,61 @@ resource "aws_security_group" "webserver_sg" {
 
 
 # 7. Create a network interface with an IP in the subnet that was created in no 2
+
+
 resource "aws_network_interface" "chisom_network_interface" {
   subnet_id       = aws_subnet.chisom_subnet.id
-  private_ips     = ["10.0.0.50"]
+  private_ips     = ["10.0.1.50"]
   security_groups = [aws_security_group.webserver_sg.id]
 }
 
 
-
 # 8. Assign an elastic IP to the network interface created in #7
-# 9. Create an Ubuntu server and install/enabled apachez
+
+resource "aws_eip" "chisom_eip" {
+  domain                    = "vpc"
+  network_interface         = aws_network_interface.chisom_network_interface.id
+  associate_with_private_ip = "10.0.1.50"
+  depends_on                = [aws_internet_gateway.chisom_igw]
+}
+
+
+
+
+# 9. Create an Ubuntu server and install/enabled apache2
+
+resource "aws_instance" "chisom_Server" {
+  ami                         = "ami-0ba8562d785e35387"
+  instance_type               = "t2.micro"
+  key_name                    = "Benedine"
+  depends_on                  = [aws_eip.chisom_eip]
+
+  network_interface {
+    network_interface_id = aws_network_interface.chisom_network_interface.id
+    device_index         = 0
+  }
+
+  tags = {
+    Name = "chisom_ubuntu"
+  }
+  user_data = <<EOF
+#!/bin/bash
+sudo apt update -y
+sudo apt install apache2 -y
+sudo systemctl enable apache2
+sudo systemctl start apache2
+sudo bash -c 'echo hello mezikko > /var/www/html/index.html'
+EOF
+
+}
+
+
 # 10. Output the public IP of the Ubuntu server
+output "public_ip" {
+  value = aws_eip.chisom_eip.public_ip
+}
+
+output "private_ip" {
+  value = aws_instance.chisom_Server.private_ip
+
+}
